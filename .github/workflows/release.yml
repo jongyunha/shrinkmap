@@ -7,25 +7,23 @@ on:
 
 jobs:
   release:
+    name: Create Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
-          check-latest: true
-
-      - name: Set Go version env
-        run: |
-          echo "GOVERSION=$(go version | cut -d ' ' -f 3)" >> $GITHUB_ENV
+          go-version: '1.21'
+          cache: true
 
       - name: Run tests
         run: go test -v ./...
@@ -33,22 +31,22 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
+          distribution: goreleaser
           version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          GOVERSION: ${{ env.GOVERSION }}
 
       - name: Generate documentation
         run: |
           go install golang.org/x/tools/cmd/godoc@latest
-          godoc -http=:6060 &
-          sleep 5
-          curl http://localhost:6060/pkg/github.com/jongyunha/shrinkmap > docs/index.html
+          mkdir -p docs
+          echo "# ShrinkableMap Documentation" > docs/README.md
+          go doc -all >> docs/README.md
 
       - name: Upload documentation
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: documentation
           path: docs/
+          if-no-files-found: error
