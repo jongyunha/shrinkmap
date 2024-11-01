@@ -7,12 +7,13 @@ ShrinkableMap is a high-performance, generic, thread-safe map implementation for
 ## Features
 
 - 🚀 Generic type support for type-safe operations
-- 🔒 Thread-safe implementation
-- 📉 Automatic memory shrinking
-- ⚙️ Configurable shrinking behavior
-- 📊 Built-in performance metrics
+- 🔒 Thread-safe implementation with atomic operations
+- 📉 Automatic memory shrinking with configurable policies
+- ⚙️ Advanced concurrent shrinking behavior
+- 📊 Thread-safe performance metrics
 - 🎯 Zero external dependencies
 - 💪 Production-ready with comprehensive tests
+- 🛡️ Race condition free
 
 ## Installation
 
@@ -27,6 +28,7 @@ package main
 
 import (
     "fmt"
+    "time"
     "github.com/jongyunha/shrinkmap"
 )
 
@@ -49,12 +51,23 @@ func main() {
     // Get current size
     size := sm.Len()
     fmt.Printf("Map size: %d\n", size)
+    
+    // Force shrink
+    sm.ForceShrink()
+    
+    // Get metrics
+    metrics := sm.GetMetrics()
+    fmt.Printf("Total operations: %d\n", metrics.TotalItemsProcessed)
 }
 ```
 
 ## Configuration
 
 ```go
+// Create default configuration
+config := shrinkmap.DefaultConfig()
+
+// Or customize configuration
 config := shrinkmap.Config{
     ShrinkInterval:        5 * time.Minute,  // How often to check for shrinking
     ShrinkRatio:          0.25,             // Ratio of deleted items that triggers shrinking
@@ -65,29 +78,35 @@ config := shrinkmap.Config{
     CapacityGrowthFactor: 1.2,             // Growth factor for new map allocation
 }
 
+// Create map with custom config
 sm := shrinkmap.New[string, int](config)
+
+// Use builder pattern for configuration
+config := shrinkmap.DefaultConfig().
+    WithShrinkInterval(time.Minute).
+    WithShrinkRatio(0.3).
+    WithInitialCapacity(1000).
+    WithAutoShrinkEnabled(true)
 ```
 
 ## Features in Detail
 
-### Automatic Shrinking
+### Atomic Operations
 
-The map automatically shrinks its internal storage when:
-- The ratio of deleted items exceeds `ShrinkRatio`
-- The time since the last shrink is greater than `MinShrinkInterval`
-- `AutoShrinkEnabled` is true
+All operations are implemented using atomic operations where appropriate, ensuring thread safety without compromising performance:
 
 ```go
-// Force immediate shrink
-sm.ForceShrink()
-
-// Try to shrink if conditions are met
-sm.TryShrink()
+// Safely modify map in multiple goroutines
+for i := 0; i < 100; i++ {
+    go func(val int) {
+        sm.Set(fmt.Sprintf("key%d", val), val)
+    }(i)
+}
 ```
 
-### Performance Metrics
+### Thread-Safe Metrics
 
-Monitor map performance with built-in metrics:
+Monitor map performance with built-in thread-safe metrics:
 
 ```go
 metrics := sm.GetMetrics()
@@ -97,60 +116,72 @@ fmt.Printf("Total items processed: %d\n", metrics.TotalItemsProcessed)
 fmt.Printf("Peak size: %d\n", metrics.PeakSize)
 ```
 
-### Thread Safety
+### Shrinking Control
 
-All operations are thread-safe by default. The map can be safely used across multiple goroutines:
-
-```go
-// Safe for concurrent use
-go func() {
-    sm.Set("key1", 1)
-}()
-
-go func() {
-    if value, exists := sm.Get("key1"); exists {
-        // Handle value
-    }
-}()
-```
-
-### Range Operation
-
-Iterate over all key-value pairs:
+Fine-grained control over shrinking behavior:
 
 ```go
-sm.Range(func(key string, value int) bool {
-    fmt.Printf("Key: %s, Value: %d\n", key, value)
-    return true // Continue iteration
-})
+// Force immediate shrink
+success := sm.ForceShrink()
+
+// Try to shrink if conditions are met
+shrunk := sm.TryShrink()
+
+// Configure shrinking behavior
+config := shrinkmap.DefaultConfig().
+    WithShrinkRatio(0.3).            // More aggressive shrinking
+    WithMinShrinkInterval(time.Minute)  // More frequent shrinks
 ```
 
 ## Performance
 
-Benchmark results compared to sync.Map (Go 1.21):
+Benchmark results (Go 1.22, AMD64):
 
 ```
-BenchmarkShrinkableMap/Set-8         5000000    234 ns/op    8 allocs/op
-BenchmarkShrinkableMap/Get-8         20000000   60.1 ns/op   0 allocs/op
-BenchmarkShrinkableMap/Delete-8      10000000   112 ns/op    0 allocs/op
+BenchmarkShrinkableMap/Set/Parallel-8          10000000    115 ns/op     0 allocs/op
+BenchmarkShrinkableMap/Get/Parallel-8          20000000    60.1 ns/op    0 allocs/op
+BenchmarkShrinkableMap/Delete/Parallel-8       15000000    102 ns/op     0 allocs/op
+BenchmarkShrinkableMap/Mixed/Parallel-8        10000000    112 ns/op     0 allocs/op
 ```
 
 ## Best Practices
 
-1. Choose appropriate shrink ratio:
+1. Configure shrinking based on your usage pattern:
 ```go
-config.ShrinkRatio = 0.25 // Shrink when 25% of items are deleted
+// High-churn scenario
+config := shrinkmap.DefaultConfig().
+    WithShrinkInterval(time.Minute).
+    WithShrinkRatio(0.2)
+
+// Memory-sensitive scenario
+config := shrinkmap.DefaultConfig().
+    WithCapacityGrowthFactor(1.1).
+    WithMaxMapSize(100000)
 ```
 
-2. Adjust shrink interval based on usage patterns:
+2. Use appropriate initial capacity:
 ```go
-config.ShrinkInterval = 1 * time.Minute // More frequent for high-churn maps
+// When you know approximate size
+config := shrinkmap.DefaultConfig().
+    WithInitialCapacity(expectedSize)
 ```
 
-3. Set initial capacity for better performance:
+3. Validate configuration:
 ```go
-config.InitialCapacity = 1000 // When expecting ~1000 items
+config := shrinkmap.DefaultConfig().
+    WithShrinkRatio(0.3)
+
+if err := config.Validate(); err != nil {
+    log.Fatal(err)
+}
 ```
+
+## Thread Safety Guarantees
+
+- All map operations are atomic and thread-safe
+- Metrics collection is non-blocking and thread-safe
+- Shrinking operations are coordinated to prevent conflicts
+- Safe concurrent access from multiple goroutines
 
 ## License
 
@@ -165,11 +196,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Version History
 
 - 0.0.1 (ing...)
-    - Initial release
-    - Generic type support
-    - Automatic shrinking
-    - Thread safety
-    - Performance metrics
+  - Initial release
+  - Thread-safe implementation with atomic operations
+  - Generic type support
+  - Automatic shrinking with configurable policies
+  - Comprehensive benchmark suite
+  - Race condition free guarantee
 
 ---
 Made with ❤️ by [Jongyun Ha](https://github.com/jongyunha)
