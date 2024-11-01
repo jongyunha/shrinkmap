@@ -73,7 +73,7 @@ func customExample() {
 	// Check metrics
 	metrics := sm.GetMetrics()
 	fmt.Printf("Custom - Total processed: %d, Total shrinks: %d\n",
-		metrics.TotalItemsProcessed, metrics.TotalShrinks)
+		metrics.TotalItemsProcessed(), metrics.TotalShrinks())
 }
 
 func builderExample() {
