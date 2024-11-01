@@ -2,66 +2,31 @@ package shrinkmap
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // ShrinkableMap provides a generic map structure with automatic shrinking capabilities
 type ShrinkableMap[K comparable, V any] struct {
-	data           map[K]V
 	mu             sync.RWMutex
-	itemCount      int
-	deletedCount   int
+	data           map[K]V
+	itemCount      int32 // Use atomic operations
+	deletedCount   int32 // Use atomic operations
 	config         Config
-	lastShrinkTime time.Time
-	metrics        Metrics
-}
-
-// Config defines the configuration options for ShrinkableMap
-type Config struct {
-	// How often to check if the map needs shrinking
-	ShrinkInterval time.Duration
-	// Ratio of deleted items that triggers shrinking (0.0 to 1.0)
-	ShrinkRatio float64
-	// Initial capacity of the map
-	InitialCapacity int
-	// Enable/disable automatic shrinking
-	AutoShrinkEnabled bool
-	// Minimum time between shrinks
-	MinShrinkInterval time.Duration
-	// Maximum map size before forcing a shrink
-	MaxMapSize int
-	// Extra capacity factor when creating new map (e.g., 1.2 for 20% extra space)
-	CapacityGrowthFactor float64
-}
-
-// Metrics tracks performance metrics of the map
-type Metrics struct {
-	TotalShrinks        int
-	LastShrinkDuration  time.Duration
-	TotalItemsProcessed int64
-	PeakSize            int
-}
-
-// DefaultConfig returns the default configuration for ShrinkableMap
-func DefaultConfig() Config {
-	return Config{
-		ShrinkInterval:       5 * time.Minute,
-		ShrinkRatio:          0.25,
-		InitialCapacity:      16,
-		AutoShrinkEnabled:    true,
-		MinShrinkInterval:    30 * time.Second,
-		MaxMapSize:           1000000,
-		CapacityGrowthFactor: 1.2,
-	}
+	lastShrinkTime atomic.Value // Use atomic for time value
+	metrics        *Metrics     // Use pointer to ensure atomic access
+	shrinking      atomic.Bool  // Flag to track shrink operation
 }
 
 // New creates a new ShrinkableMap with the given configuration
 func New[K comparable, V any](config Config) *ShrinkableMap[K, V] {
 	sm := &ShrinkableMap[K, V]{
-		data:           make(map[K]V, config.InitialCapacity),
-		config:         config,
-		lastShrinkTime: time.Now(),
+		data:    make(map[K]V, config.InitialCapacity),
+		config:  config,
+		metrics: &Metrics{},
 	}
+
+	sm.lastShrinkTime.Store(time.Now())
 
 	if config.AutoShrinkEnabled {
 		go sm.shrinkLoop()
@@ -72,155 +37,163 @@ func New[K comparable, V any](config Config) *ShrinkableMap[K, V] {
 // Set stores a key-value pair in the map
 func (sm *ShrinkableMap[K, V]) Set(key K, value V) {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	if _, exists := sm.data[key]; !exists {
-		sm.itemCount++
-		sm.metrics.TotalItemsProcessed++
-		if sm.itemCount > sm.metrics.PeakSize {
-			sm.metrics.PeakSize = sm.itemCount
-		}
-	}
+	_, exists := sm.data[key]
 	sm.data[key] = value
+	sm.mu.Unlock()
 
-	// Force shrink if max size is exceeded
-	if sm.config.MaxMapSize > 0 && sm.itemCount >= sm.config.MaxMapSize {
-		sm.shrink()
+	if !exists {
+		atomic.AddInt32(&sm.itemCount, 1)
+		sm.updateMetrics(1)
+	}
+
+	// Check if shrink is needed
+	if sm.config.MaxMapSize > 0 && atomic.LoadInt32(&sm.itemCount) >= int32(sm.config.MaxMapSize) {
+		sm.TryShrink()
 	}
 }
 
 // Get retrieves the value associated with the given key
 func (sm *ShrinkableMap[K, V]) Get(key K) (V, bool) {
 	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
 	value, exists := sm.data[key]
+	sm.mu.RUnlock()
 	return value, exists
 }
 
 // Delete removes the entry for the given key
 func (sm *ShrinkableMap[K, V]) Delete(key K) bool {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	if _, exists := sm.data[key]; exists {
+	_, exists := sm.data[key]
+	if exists {
 		delete(sm.data, key)
-		sm.deletedCount++
-		if sm.config.AutoShrinkEnabled {
-			sm.checkAndShrink()
-		}
-		return true
+		atomic.AddInt32(&sm.deletedCount, 1)
 	}
-	return false
+	sm.mu.Unlock()
+
+	if exists && sm.config.AutoShrinkEnabled {
+		sm.TryShrink()
+	}
+	return exists
 }
 
 // Len returns the current number of items in the map
 func (sm *ShrinkableMap[K, V]) Len() int {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.itemCount - sm.deletedCount
+	return int(atomic.LoadInt32(&sm.itemCount) - atomic.LoadInt32(&sm.deletedCount))
 }
 
-// ForceShrink immediately shrinks the map regardless of conditions
-func (sm *ShrinkableMap[K, V]) ForceShrink() bool {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+// updateMetrics safely updates the metrics
+func (sm *ShrinkableMap[K, V]) updateMetrics(processedItems int64) {
+	sm.metrics.mu.Lock()
+	defer sm.metrics.mu.Unlock()
 
-	return sm.shrink()
-}
-
-// TryShrink attempts to shrink the map if conditions are met
-func (sm *ShrinkableMap[K, V]) TryShrink() bool {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	if sm.shouldShrink() {
-		return sm.shrink()
+	sm.metrics.totalItemsProcessed += processedItems
+	currentSize := atomic.LoadInt32(&sm.itemCount)
+	if currentSize > sm.metrics.peakSize {
+		sm.metrics.peakSize = currentSize
 	}
-	return false
 }
 
-// GetMetrics returns the current performance metrics
+// GetMetrics returns a copy of the current metrics
 func (sm *ShrinkableMap[K, V]) GetMetrics() Metrics {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.metrics
-}
-
-// UpdateConfig updates the map's configuration at runtime
-func (sm *ShrinkableMap[K, V]) UpdateConfig(newConfig Config) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	sm.config = newConfig
-}
-
-// Range iterates over the map and calls the given function for each key-value pair
-func (sm *ShrinkableMap[K, V]) Range(fn func(key K, value V) bool) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	for k, v := range sm.data {
-		if !fn(k, v) {
-			break
-		}
-	}
-}
-
-// shrinkLoop runs the periodic shrink check
-func (sm *ShrinkableMap[K, V]) shrinkLoop() {
-	ticker := time.NewTicker(sm.config.ShrinkInterval)
-	for range ticker.C {
-		sm.mu.Lock()
-		sm.checkAndShrink()
-		sm.mu.Unlock()
-	}
-}
-
-// checkAndShrink checks if shrinking is needed and performs it if necessary
-func (sm *ShrinkableMap[K, V]) checkAndShrink() {
-	if sm.shouldShrink() {
-		sm.shrink()
+	sm.metrics.mu.RLock()
+	defer sm.metrics.mu.RUnlock()
+	return Metrics{
+		totalShrinks:        sm.metrics.totalShrinks,
+		lastShrinkDuration:  sm.metrics.lastShrinkDuration,
+		totalItemsProcessed: sm.metrics.totalItemsProcessed,
+		peakSize:            sm.metrics.peakSize,
 	}
 }
 
 // shouldShrink determines if the map should be shrunk based on current conditions
 func (sm *ShrinkableMap[K, V]) shouldShrink() bool {
-	if sm.itemCount == 0 {
+	itemCount := atomic.LoadInt32(&sm.itemCount)
+	if itemCount == 0 {
 		return false
 	}
 
-	deletedRatio := float64(sm.deletedCount) / float64(sm.itemCount)
-	timeToShrink := time.Since(sm.lastShrinkTime) >= sm.config.MinShrinkInterval
+	deletedCount := atomic.LoadInt32(&sm.deletedCount)
+	deletedRatio := float64(deletedCount) / float64(itemCount)
+
+	lastShrink := sm.lastShrinkTime.Load().(time.Time)
+	timeToShrink := time.Since(lastShrink) >= sm.config.MinShrinkInterval
 
 	return deletedRatio >= sm.config.ShrinkRatio && timeToShrink
 }
 
 // shrink creates a new map and copies non-deleted items to it
 func (sm *ShrinkableMap[K, V]) shrink() bool {
-	if sm.itemCount == 0 {
+	// Prevent concurrent shrink operations
+	if !sm.shrinking.CompareAndSwap(false, true) {
+		return false
+	}
+	defer sm.shrinking.Store(false)
+
+	startTime := time.Now()
+
+	// Create snapshot of current data
+	sm.mu.Lock()
+	currentData := make(map[K]V, len(sm.data))
+	for k, v := range sm.data {
+		currentData[k] = v
+	}
+	sm.mu.Unlock()
+
+	// Calculate new size
+	currentLen := sm.Len()
+	if currentLen == 0 {
 		return false
 	}
 
-	startTime := time.Now()
-	newSize := int(float64(sm.Len()) * sm.config.CapacityGrowthFactor)
+	newSize := int(float64(currentLen) * sm.config.CapacityGrowthFactor)
 	if newSize < sm.config.InitialCapacity {
 		newSize = sm.config.InitialCapacity
 	}
 
+	// Create and populate new map
 	newMap := make(map[K]V, newSize)
-
-	for k, v := range sm.data {
+	for k, v := range currentData {
 		newMap[k] = v
 	}
 
+	// Update map with new data
+	sm.mu.Lock()
 	sm.data = newMap
-	sm.itemCount = len(newMap)
-	sm.deletedCount = 0
-	sm.lastShrinkTime = time.Now()
+	newCount := int32(len(newMap))
+	atomic.StoreInt32(&sm.itemCount, newCount)
+	atomic.StoreInt32(&sm.deletedCount, 0)
+	sm.mu.Unlock()
 
-	sm.metrics.TotalShrinks++
-	sm.metrics.LastShrinkDuration = time.Since(startTime)
+	// Update metrics
+	sm.metrics.mu.Lock()
+	sm.metrics.totalShrinks++
+	sm.metrics.lastShrinkDuration = time.Since(startTime)
+	sm.metrics.mu.Unlock()
+
+	sm.lastShrinkTime.Store(time.Now())
 
 	return true
+}
+
+// TryShrink attempts to shrink the map if conditions are met
+func (sm *ShrinkableMap[K, V]) TryShrink() bool {
+	if sm.shouldShrink() {
+		return sm.shrink()
+	}
+	return false
+}
+
+// ForceShrink immediately shrinks the map regardless of conditions
+func (sm *ShrinkableMap[K, V]) ForceShrink() bool {
+	return sm.shrink()
+}
+
+// shrinkLoop runs the periodic shrink check
+func (sm *ShrinkableMap[K, V]) shrinkLoop() {
+	ticker := time.NewTicker(sm.config.ShrinkInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		sm.TryShrink()
+	}
 }
