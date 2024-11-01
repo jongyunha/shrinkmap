@@ -1,44 +1,81 @@
-builds:
-  - env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    dir: .
-    main: .
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+project_name: shrinkmap
 
-archives:
-  - format: tar.gz
-    name_template: >-
-      {{ .ProjectName }}_
-      {{- .Version }}_
-      {{- .Os }}_
-      {{- .Arch }}
-    format_overrides:
-      - goos: windows
-        format: zip
+before:
+  hooks:
+    - go mod tidy
+
+release:
+  github:
+    owner: jongyunha
+    name: shrinkmap
+  draft: false
+  prerelease: auto
+  mode: replace
+  name_template: "v{{.Version}}"
+  header: |
+    ## ShrinkableMap v{{.Version}}
+
+    For more information, please refer to the [documentation](https://pkg.go.dev/github.com/jongyunha/shrinkmap).
+
+    ### Installation
+    ```bash
+    go get github.com/jongyunha/shrinkmap@v{{.Version}}
+    ```
+  footer: |
+    **Full Changelog**: https://github.com/jongyunha/shrinkmap/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 changelog:
+  use: github
   sort: asc
   filters:
     exclude:
       - '^docs:'
       - '^test:'
-      - '^dev:'
-      - 'README'
+      - '^ci:'
+      - '^chore:'
       - Merge pull request
       - Merge branch
+      - go mod tidy
+
+archives:
+  - id: source
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_source
+    format: tar.gz
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+      - '*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+    wrap_in_directory: true
+    format_overrides:
+      - goos: windows
+        format: zip
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
 
 checksum:
   name_template: 'checksums.txt'
+  algorithm: sha256
 
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+signs:
+  - cmd: gpg
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+    signature: "${artifact}.sig"
+    artifacts: checksum
+
+env:
+  - GO111MODULE=on
+  - CGO_ENABLED=0
