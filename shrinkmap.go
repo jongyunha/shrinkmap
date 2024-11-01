@@ -10,8 +10,8 @@ import (
 type ShrinkableMap[K comparable, V any] struct {
 	mu             sync.RWMutex
 	data           map[K]V
-	itemCount      int32 // Use atomic operations
-	deletedCount   int32 // Use atomic operations
+	itemCount      int64 // Use atomic operations
+	deletedCount   int64 // Use atomic operations
 	config         Config
 	lastShrinkTime atomic.Value // Use atomic for time value
 	metrics        *Metrics     // Use pointer to ensure atomic access
@@ -42,12 +42,12 @@ func (sm *ShrinkableMap[K, V]) Set(key K, value V) {
 	sm.mu.Unlock()
 
 	if !exists {
-		atomic.AddInt32(&sm.itemCount, 1)
+		atomic.AddInt64(&sm.itemCount, 1)
 		sm.updateMetrics(1)
 	}
 
 	// Check if shrink is needed
-	if sm.config.MaxMapSize > 0 && atomic.LoadInt32(&sm.itemCount) >= int32(sm.config.MaxMapSize) {
+	if sm.config.MaxMapSize > 0 && atomic.LoadInt64(&sm.itemCount) >= int64(sm.config.MaxMapSize) {
 		sm.TryShrink()
 	}
 }
@@ -66,7 +66,7 @@ func (sm *ShrinkableMap[K, V]) Delete(key K) bool {
 	_, exists := sm.data[key]
 	if exists {
 		delete(sm.data, key)
-		atomic.AddInt32(&sm.deletedCount, 1)
+		atomic.AddInt64(&sm.deletedCount, 1)
 	}
 	sm.mu.Unlock()
 
@@ -78,7 +78,7 @@ func (sm *ShrinkableMap[K, V]) Delete(key K) bool {
 
 // Len returns the current number of items in the map
 func (sm *ShrinkableMap[K, V]) Len() int {
-	return int(atomic.LoadInt32(&sm.itemCount) - atomic.LoadInt32(&sm.deletedCount))
+	return int(atomic.LoadInt64(&sm.itemCount) - atomic.LoadInt64(&sm.deletedCount))
 }
 
 // updateMetrics safely updates the metrics
@@ -87,9 +87,9 @@ func (sm *ShrinkableMap[K, V]) updateMetrics(processedItems int64) {
 	defer sm.metrics.mu.Unlock()
 
 	sm.metrics.totalItemsProcessed += processedItems
-	currentSize := atomic.LoadInt32(&sm.itemCount)
-	if currentSize > sm.metrics.peakSize {
-		sm.metrics.peakSize = currentSize
+	currentSize := atomic.LoadInt64(&sm.itemCount)
+	if currentSize > int64(sm.metrics.peakSize) {
+		sm.metrics.peakSize = int32(currentSize)
 	}
 }
 
@@ -107,12 +107,12 @@ func (sm *ShrinkableMap[K, V]) GetMetrics() Metrics {
 
 // shouldShrink determines if the map should be shrunk based on current conditions
 func (sm *ShrinkableMap[K, V]) shouldShrink() bool {
-	itemCount := atomic.LoadInt32(&sm.itemCount)
+	itemCount := atomic.LoadInt64(&sm.itemCount)
 	if itemCount == 0 {
 		return false
 	}
 
-	deletedCount := atomic.LoadInt32(&sm.deletedCount)
+	deletedCount := atomic.LoadInt64(&sm.deletedCount)
 	deletedRatio := float64(deletedCount) / float64(itemCount)
 
 	lastShrink := sm.lastShrinkTime.Load().(time.Time)
@@ -159,9 +159,9 @@ func (sm *ShrinkableMap[K, V]) shrink() bool {
 	// Update map with new data
 	sm.mu.Lock()
 	sm.data = newMap
-	newCount := int32(len(newMap))
-	atomic.StoreInt32(&sm.itemCount, newCount)
-	atomic.StoreInt32(&sm.deletedCount, 0)
+	newCount := int64(len(newMap))
+	atomic.StoreInt64(&sm.itemCount, newCount)
+	atomic.StoreInt64(&sm.deletedCount, 0)
 	sm.mu.Unlock()
 
 	// Update metrics
