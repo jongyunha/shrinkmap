@@ -1,27 +1,20 @@
-builds:
-  - env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    dir: .
-    main: .
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+before:
+  hooks:
+    - go mod tidy
 
 archives:
   - format: tar.gz
+    files:
+      - src/**/*
+      - LICENSE*
+      - README*
+      - docs/**/*
+      - '*.go'
+      - go.mod
+      - go.sum
     name_template: >-
       {{ .ProjectName }}_
-      {{- .Version }}_
-      {{- .Os }}_
-      {{- .Arch }}
+      {{- .Version }}
     format_overrides:
       - goos: windows
         format: zip
@@ -42,3 +35,33 @@ checksum:
 
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
+
+release:
+  github:
+    owner: jongyunha
+    name: shrinkmap
+
+  draft: false
+  prerelease: auto
+
+  name_template: "Release {{.Version}}"
+
+  header: |
+    ## ShrinkableMap {{.Version}} ({{ .Date }})
+
+    See [CHANGELOG.md](CHANGELOG.md) for all changes.
+
+    ### Installation
+    ```bash
+    go get github.com/jongyunha/shrinkmap@{{.Version}}
+    ```
+
+  footer: |
+    ### Thanks!
+
+    * Thanks to all contributors
+    * Built with Go {{.Env.GO_VERSION}}
+    * Full changelog: https://github.com/jongyunha/shrinkmap/blob/main/CHANGELOG.md
+
+env:
+  - GO_VERSION={{ .Env.GOVERSION }}
