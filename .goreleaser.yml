@@ -4,26 +4,6 @@ before:
   hooks:
     - go mod tidy
 
-release:
-  github:
-    owner: jongyunha
-    name: shrinkmap
-  draft: false
-  prerelease: auto
-  mode: replace
-  name_template: "v{{.Version}}"
-  header: |
-    ## ShrinkableMap v{{.Version}}
-
-    For more information, please refer to the [documentation](https://pkg.go.dev/github.com/jongyunha/shrinkmap).
-
-    ### Installation
-    ```bash
-    go get github.com/jongyunha/shrinkmap@v{{.Version}}
-    ```
-  footer: |
-    **Full Changelog**: https://github.com/jongyunha/shrinkmap/compare/{{ .PreviousTag }}...{{ .Tag }}
-
 changelog:
   use: github
   sort: asc
