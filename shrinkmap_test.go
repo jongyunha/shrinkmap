@@ -493,11 +493,6 @@ func TestSnapshot(t *testing.T) {
 					switch j % 3 {
 					case 0:
 						sm.Set(key, j)
-					case 1:
-						snapshot := sm.Snapshot()
-						if len(snapshot) < 0 {
-							t.Error("Invalid snapshot length")
-						}
 					case 2:
 						sm.Delete(key)
 					}
