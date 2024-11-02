@@ -423,18 +423,14 @@ func TestStopFunctionality(t *testing.T) {
 		config.ShrinkInterval = 10 * time.Millisecond
 		sm := New[string, int](config)
 
-		// 일부 데이터 추가
 		for i := 0; i < 100; i++ {
 			sm.Set(fmt.Sprintf("key%d", i), i)
 		}
 
-		// Stop 호출
 		sm.Stop()
 
-		// 일부 시간 대기
 		time.Sleep(50 * time.Millisecond)
 
-		// Stop 이후 추가 작업
 		sm.Set("new-key", 1000)
 		sm.Delete("new-key")
 
