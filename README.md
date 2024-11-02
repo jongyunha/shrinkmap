@@ -10,10 +10,12 @@ ShrinkableMap is a high-performance, generic, thread-safe map implementation for
 - 🔒 Thread-safe implementation with atomic operations
 - 📉 Automatic memory shrinking with configurable policies
 - ⚙️ Advanced concurrent shrinking behavior
-- 📊 Thread-safe performance metrics
-- 🎯 Zero external dependencies
+- 📊 Thread-safe performance and error metrics
+- 🛡️ Panic recovery and error tracking
+- 🔍 Safe state inspection with snapshots
+- 🧹 Graceful resource cleanup
 - 💪 Production-ready with comprehensive tests
-- 🛡️ Race condition free
+- 🎯 Zero external dependencies
 
 ## Installation
 
@@ -35,145 +37,89 @@ import (
 func main() {
     // Create a new map with string keys and int values
     sm := shrinkmap.New[string, int](shrinkmap.DefaultConfig())
-    
+
+    // Ensure cleanup when done
+    defer sm.Stop()
+
     // Set values
     sm.Set("one", 1)
     sm.Set("two", 2)
-    
+
     // Get value
     if value, exists := sm.Get("one"); exists {
         fmt.Printf("Value: %d\n", value)
     }
-    
+
     // Delete value
     sm.Delete("one")
-    
-    // Get current size
-    size := sm.Len()
-    fmt.Printf("Map size: %d\n", size)
-    
-    // Force shrink
-    sm.ForceShrink()
-    
-    // Get metrics
+
+    // Get current state snapshot
+    snapshot := sm.Snapshot()
+    for _, kv := range snapshot {
+        fmt.Printf("Key: %v, Value: %v\n", kv.Key, kv.Value)
+    }
+
+    // Get metrics including error statistics
     metrics := sm.GetMetrics()
-    fmt.Printf("Total operations: %d\n", metrics.TotalItemsProcessed)
+    fmt.Printf("Total operations: %d\n", metrics.TotalItemsProcessed())
+    fmt.Printf("Total errors: %d\n", metrics.TotalErrors())
+    fmt.Printf("Total panics: %d\n", metrics.TotalPanics())
 }
 ```
 
-## Configuration
+## Advanced Features
 
-```go
-// Create default configuration
-config := shrinkmap.DefaultConfig()
+### Error Tracking and Recovery
 
-// Or customize configuration
-config := shrinkmap.Config{
-    ShrinkInterval:        5 * time.Minute,  // How often to check for shrinking
-    ShrinkRatio:          0.25,             // Ratio of deleted items that triggers shrinking
-    InitialCapacity:      16,               // Initial map capacity
-    AutoShrinkEnabled:    true,             // Enable automatic shrinking
-    MinShrinkInterval:    30 * time.Second, // Minimum time between shrinks
-    MaxMapSize:           1000000,          // Maximum map size before forcing shrink
-    CapacityGrowthFactor: 1.2,             // Growth factor for new map allocation
-}
-
-// Create map with custom config
-sm := shrinkmap.New[string, int](config)
-
-// Use builder pattern for configuration
-config := shrinkmap.DefaultConfig().
-    WithShrinkInterval(time.Minute).
-    WithShrinkRatio(0.3).
-    WithInitialCapacity(1000).
-    WithAutoShrinkEnabled(true)
-```
-
-## Features in Detail
-
-### Atomic Operations
-
-All operations are implemented using atomic operations where appropriate, ensuring thread safety without compromising performance:
-
-```go
-// Safely modify map in multiple goroutines
-for i := 0; i < 100; i++ {
-    go func(val int) {
-        sm.Set(fmt.Sprintf("key%d", val), val)
-    }(i)
-}
-```
-
-### Thread-Safe Metrics
-
-Monitor map performance with built-in thread-safe metrics:
+Monitor and track errors with detailed information:
 
 ```go
 metrics := sm.GetMetrics()
-fmt.Printf("Total shrinks: %d\n", metrics.TotalShrinks)
-fmt.Printf("Last shrink duration: %v\n", metrics.LastShrinkDuration)
-fmt.Printf("Total items processed: %d\n", metrics.TotalItemsProcessed)
-fmt.Printf("Peak size: %d\n", metrics.PeakSize)
-```
 
-### Shrinking Control
+// Get error statistics
+totalErrors := metrics.TotalErrors()
+totalPanics := metrics.TotalPanics()
+lastPanicTime := metrics.LastPanicTime()
 
-Fine-grained control over shrinking behavior:
-
-```go
-// Force immediate shrink
-success := sm.ForceShrink()
-
-// Try to shrink if conditions are met
-shrunk := sm.TryShrink()
-
-// Configure shrinking behavior
-config := shrinkmap.DefaultConfig().
-    WithShrinkRatio(0.3).            // More aggressive shrinking
-    WithMinShrinkInterval(time.Minute)  // More frequent shrinks
-```
-
-## Performance
-
-Benchmark results (Go 1.22, AMD64):
-
-```
-BenchmarkShrinkableMap/Set/Parallel-8          10000000    115 ns/op     0 allocs/op
-BenchmarkShrinkableMap/Get/Parallel-8          20000000    60.1 ns/op    0 allocs/op
-BenchmarkShrinkableMap/Delete/Parallel-8       15000000    102 ns/op     0 allocs/op
-BenchmarkShrinkableMap/Mixed/Parallel-8        10000000    112 ns/op     0 allocs/op
-```
-
-## Best Practices
-
-1. Configure shrinking based on your usage pattern:
-```go
-// High-churn scenario
-config := shrinkmap.DefaultConfig().
-    WithShrinkInterval(time.Minute).
-    WithShrinkRatio(0.2)
-
-// Memory-sensitive scenario
-config := shrinkmap.DefaultConfig().
-    WithCapacityGrowthFactor(1.1).
-    WithMaxMapSize(100000)
-```
-
-2. Use appropriate initial capacity:
-```go
-// When you know approximate size
-config := shrinkmap.DefaultConfig().
-    WithInitialCapacity(expectedSize)
-```
-
-3. Validate configuration:
-```go
-config := shrinkmap.DefaultConfig().
-    WithShrinkRatio(0.3)
-
-if err := config.Validate(); err != nil {
-    log.Fatal(err)
+// Get last error details
+if lastError := metrics.LastError(); lastError != nil {
+    fmt.Printf("Last error: %v\n", lastError.Error)
+    fmt.Printf("Stack trace: %v\n", lastError.Stack)
+    fmt.Printf("Time: %v\n", lastError.Timestamp)
 }
+
+// Get error history (last 10 errors)
+errorHistory := metrics.ErrorHistory()
+for _, err := range errorHistory {
+    fmt.Printf("Error: %v, Time: %v\n", err.Error, err.Timestamp)
+}
+```
+
+### State Inspection
+
+Safely inspect map state without locking:
+
+```go
+// Get current state snapshot
+snapshot := sm.Snapshot()
+for _, kv := range snapshot {
+    fmt.Printf("Key: %v, Value: %v\n", kv.Key, kv.Value)
+}
+```
+
+### Resource Management
+
+Proper cleanup with graceful shutdown:
+
+```go
+// Create map
+sm := shrinkmap.New[string, int](shrinkmap.DefaultConfig())
+
+// Ensure cleanup
+defer sm.Stop()
+
+// Or stop explicitly when needed
+sm.Stop()
 ```
 
 ## Thread Safety Guarantees
@@ -182,26 +128,55 @@ if err := config.Validate(); err != nil {
 - Metrics collection is non-blocking and thread-safe
 - Shrinking operations are coordinated to prevent conflicts
 - Safe concurrent access from multiple goroutines
+- Panic recovery in auto-shrink goroutine
+- Thread-safe error tracking and metrics collection
+- Safe state inspection with snapshots
 
-## License
+## Best Practices
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+1. Always ensure proper cleanup:
+```go
+sm := shrinkmap.New[string, int](config)
+defer sm.Stop() // Ensure auto-shrink goroutine is cleaned up
+```
 
-## Acknowledgments
+2. Monitor errors and panics:
+```go
+metrics := sm.GetMetrics()
+if metrics.TotalErrors() > 0 {
+    // Investigate error history
+    for _, err := range metrics.ErrorHistory() {
+        log.Printf("Error: %v, Time: %v\n", err.Error, err.Timestamp)
+    }
+}
+```
 
-- Inspired by Go's built-in map implementation
-- Built with lessons learned from production systems
-- Special thanks to all contributors
+3. Use snapshots for safe iteration:
+```go
+snapshot := sm.Snapshot()
+for _, kv := range snapshot {
+    // Process items without holding locks
+    process(kv.Key, kv.Value)
+}
+```
 
 ## Version History
 
-- 0.0.1 (ing...)
-  - Initial release
-  - Thread-safe implementation with atomic operations
-  - Generic type support
-  - Automatic shrinking with configurable policies
-  - Comprehensive benchmark suite
-  - Race condition free guarantee
+- 0.0.2 (ing...)
+    - Added error tracking and panic recovery
+    - Added state snapshot functionality
+    - Added graceful shutdown with Stop()
+    - Enhanced metrics with error statistics
+    - Improved resource cleanup
+    - Added comprehensive error tracking tests
+
+- 0.0.1
+    - Initial release
+    - Thread-safe implementation with atomic operations
+    - Generic type support
+    - Automatic shrinking with configurable policies
+    - Comprehensive benchmark suite
+    - Race condition free guarantee
 
 ---
 Made with ❤️ by [Jongyun Ha](https://github.com/jongyunha)

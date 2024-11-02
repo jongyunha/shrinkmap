@@ -1,37 +1,74 @@
 package shrinkmap
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 // ShrinkableMap provides a generic map structure with automatic shrinking capabilities
+// Note: Each ShrinkableMap instance creates its own goroutine for auto-shrinking when AutoShrinkEnabled is true.
+// The goroutine will continue to run until Stop() is called, even if there are no more references to the map.
+// For transient use cases, ensure to call Stop() when the map is no longer needed to prevent goroutine leaks.
 type ShrinkableMap[K comparable, V any] struct {
 	mu             sync.RWMutex
 	data           map[K]V
-	itemCount      int64 // Use atomic operations
-	deletedCount   int64 // Use atomic operations
+	itemCount      int64
+	deletedCount   int64
 	config         Config
-	lastShrinkTime atomic.Value // Use atomic for time value
-	metrics        *Metrics     // Use pointer to ensure atomic access
-	shrinking      atomic.Bool  // Flag to track shrink operation
+	lastShrinkTime atomic.Value
+	metrics        *Metrics
+	shrinking      atomic.Bool
+	cancel         context.CancelFunc
+	stopped        atomic.Bool
+}
+
+// KeyValue represents a key-value pair for iteration purposes
+type KeyValue[K comparable, V any] struct {
+	Key   K
+	Value V
 }
 
 // New creates a new ShrinkableMap with the given configuration
 func New[K comparable, V any](config Config) *ShrinkableMap[K, V] {
+	ctx, cancel := context.WithCancel(context.Background())
 	sm := &ShrinkableMap[K, V]{
 		data:    make(map[K]V, config.InitialCapacity),
 		config:  config,
 		metrics: &Metrics{},
+		cancel:  cancel,
 	}
 
 	sm.lastShrinkTime.Store(time.Now())
 
 	if config.AutoShrinkEnabled {
-		go sm.shrinkLoop()
+		go sm.shrinkLoop(ctx)
 	}
 	return sm
+}
+
+// Stop terminates the auto-shrink goroutine if it's running
+// This should be called when the map is no longer needed to prevent goroutine leaks
+func (sm *ShrinkableMap[K, V]) Stop() {
+	if sm.stopped.CompareAndSwap(false, true) {
+		if sm.cancel != nil {
+			sm.cancel()
+		}
+	}
+}
+
+// Snapshot returns a slice of key-value pairs representing the current state of the map
+// Note: This operation requires a full lock of the map and may be expensive for large maps
+func (sm *ShrinkableMap[K, V]) Snapshot() []KeyValue[K, V] {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	result := make([]KeyValue[K, V], 0, len(sm.data))
+	for k, v := range sm.data {
+		result = append(result, KeyValue[K, V]{Key: k, Value: v})
+	}
+	return result
 }
 
 // Set stores a key-value pair in the map
@@ -102,6 +139,11 @@ func (sm *ShrinkableMap[K, V]) GetMetrics() Metrics {
 		lastShrinkDuration:  sm.metrics.lastShrinkDuration,
 		totalItemsProcessed: sm.metrics.totalItemsProcessed,
 		peakSize:            sm.metrics.peakSize,
+		shrinkPanics:        sm.metrics.shrinkPanics,
+		lastPanicTime:       sm.metrics.lastPanicTime,
+		lastError:           sm.metrics.lastError,
+		errorHistory:        sm.metrics.errorHistory,
+		totalErrors:         sm.metrics.totalErrors,
 	}
 }
 
@@ -188,12 +230,26 @@ func (sm *ShrinkableMap[K, V]) ForceShrink() bool {
 	return sm.shrink()
 }
 
-// shrinkLoop runs the periodic shrink check
-func (sm *ShrinkableMap[K, V]) shrinkLoop() {
+// shrinkLoop runs the periodic shrink check with panic recovery
+func (sm *ShrinkableMap[K, V]) shrinkLoop(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			sm.metrics.mu.Lock()
+			sm.metrics.shrinkPanics++
+			sm.metrics.lastPanicTime = time.Now()
+			sm.metrics.mu.Unlock()
+		}
+	}()
+
 	ticker := time.NewTicker(sm.config.ShrinkInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		sm.TryShrink()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sm.TryShrink()
+		}
 	}
 }
