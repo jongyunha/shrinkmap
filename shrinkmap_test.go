@@ -3,6 +3,8 @@ package shrinkmap
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -299,4 +301,216 @@ func BenchmarkMapComparison(b *testing.B) {
 			}
 		})
 	})
+}
+
+// TestErrorMetrics tests the error tracking functionality
+func TestErrorMetrics(t *testing.T) {
+	t.Run("Error Recording", func(t *testing.T) {
+		sm := New[string, int](DefaultConfig())
+
+		err := fmt.Errorf("test error")
+		stack := getStackTrace()
+		sm.metrics.RecordError(err, stack)
+
+		metrics := sm.GetMetrics()
+		if metrics.TotalErrors() != 1 {
+			t.Errorf("Expected 1 error, got %d", metrics.TotalErrors())
+		}
+
+		lastErr := metrics.LastError()
+		if lastErr == nil {
+			t.Fatal("Expected last error to be recorded")
+		}
+		if lastErr.Error.(error).Error() != "test error" {
+			t.Errorf("Expected 'test error', got %v", lastErr.Error)
+		}
+		if !strings.Contains(lastErr.Stack, "TestErrorMetrics") {
+			t.Error("Stack trace should contain test function name")
+		}
+	})
+
+	t.Run("Panic Recording", func(t *testing.T) {
+		sm := New[string, int](DefaultConfig())
+
+		// panic 발생 시뮬레이션
+		panicVal := "test panic"
+		stack := getStackTrace()
+		sm.metrics.RecordPanic(panicVal, stack)
+
+		metrics := sm.GetMetrics()
+		if metrics.TotalPanics() != 1 {
+			t.Errorf("Expected 1 panic, got %d", metrics.TotalPanics())
+		}
+
+		if metrics.LastPanicTime().IsZero() {
+			t.Error("Last panic time should be set")
+		}
+	})
+
+	t.Run("Error History", func(t *testing.T) {
+		sm := New[string, int](DefaultConfig())
+
+		for i := 0; i < 15; i++ {
+			err := fmt.Errorf("error %d", i)
+			sm.metrics.RecordError(err, getStackTrace())
+		}
+
+		history := sm.metrics.ErrorHistory()
+		if len(history) > 10 {
+			t.Errorf("Error history should be limited to 10 entries, got %d", len(history))
+		}
+
+		lastErr := history[len(history)-1]
+		if lastErr.Error.(error).Error() != "error 14" {
+			t.Errorf("Expected last error to be 'error 14', got %v", lastErr.Error)
+		}
+	})
+
+	t.Run("Metrics Reset", func(t *testing.T) {
+		sm := New[string, int](DefaultConfig())
+
+		sm.metrics.RecordError(fmt.Errorf("test error"), getStackTrace())
+		sm.metrics.RecordPanic("test panic", getStackTrace())
+
+		sm.metrics.Reset()
+
+		if sm.metrics.TotalErrors() != 0 {
+			t.Error("Total errors should be reset to 0")
+		}
+		if sm.metrics.TotalPanics() != 0 {
+			t.Error("Total panics should be reset to 0")
+		}
+		if sm.metrics.LastError() != nil {
+			t.Error("Last error should be nil after reset")
+		}
+		if !sm.metrics.LastPanicTime().IsZero() {
+			t.Error("Last panic time should be reset")
+		}
+	})
+}
+
+// TestConcurrentMetricsAccess tests concurrent access to metrics
+func TestConcurrentMetricsAccess(t *testing.T) {
+	sm := New[int, int](DefaultConfig())
+	const goroutines = 10
+	const operations = 100
+
+	for i := 0; i < goroutines; i++ {
+		for j := 0; j < operations; j++ {
+			switch j % 3 {
+			case 0:
+				sm.metrics.RecordError(fmt.Errorf("error %d-%d", i, j), getStackTrace())
+			case 1:
+				sm.metrics.RecordPanic(fmt.Sprintf("panic %d-%d", i, j), getStackTrace())
+			case 2:
+				_ = sm.metrics.ErrorHistory()
+			}
+		}
+	}
+
+	metrics := sm.GetMetrics()
+	history := metrics.ErrorHistory()
+	if len(history) != 10 {
+		t.Errorf("Expected error history to be limited to 10 entries, got %d", len(history))
+	}
+}
+
+// TestStopFunctionality tests the Stop method
+func TestStopFunctionality(t *testing.T) {
+	t.Run("Stop Auto-shrink", func(t *testing.T) {
+		config := DefaultConfig()
+		config.AutoShrinkEnabled = true
+		config.ShrinkInterval = 10 * time.Millisecond
+		sm := New[string, int](config)
+
+		// 일부 데이터 추가
+		for i := 0; i < 100; i++ {
+			sm.Set(fmt.Sprintf("key%d", i), i)
+		}
+
+		// Stop 호출
+		sm.Stop()
+
+		// 일부 시간 대기
+		time.Sleep(50 * time.Millisecond)
+
+		// Stop 이후 추가 작업
+		sm.Set("new-key", 1000)
+		sm.Delete("new-key")
+
+		if !sm.stopped.Load() {
+			t.Error("Map should be marked as stopped")
+		}
+	})
+}
+
+// TestSnapshot tests the snapshot functionality
+func TestSnapshot(t *testing.T) {
+	t.Run("Basic Snapshot", func(t *testing.T) {
+		sm := New[string, int](DefaultConfig())
+
+		expectedData := map[string]int{
+			"key1": 1,
+			"key2": 2,
+			"key3": 3,
+		}
+
+		for k, v := range expectedData {
+			sm.Set(k, v)
+		}
+
+		snapshot := sm.Snapshot()
+
+		if len(snapshot) != len(expectedData) {
+			t.Errorf("Expected %d items in snapshot, got %d", len(expectedData), len(snapshot))
+		}
+
+		snapshotMap := make(map[string]int)
+		for _, kv := range snapshot {
+			snapshotMap[kv.Key] = kv.Value
+		}
+
+		for k, v := range expectedData {
+			if sv, exists := snapshotMap[k]; !exists || sv != v {
+				t.Errorf("Snapshot mismatch for key %s: expected %d, got %d", k, v, sv)
+			}
+		}
+	})
+
+	t.Run("Concurrent Snapshot", func(t *testing.T) {
+		sm := New[int, int](DefaultConfig())
+		const goroutines = 4
+		const operations = 1000
+
+		var wg sync.WaitGroup
+		wg.Add(goroutines)
+
+		for i := 0; i < goroutines; i++ {
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < operations; j++ {
+					key := id*operations + j
+					switch j % 3 {
+					case 0:
+						sm.Set(key, j)
+					case 1:
+						snapshot := sm.Snapshot()
+						if len(snapshot) < 0 {
+							t.Error("Invalid snapshot length")
+						}
+					case 2:
+						sm.Delete(key)
+					}
+				}
+			}(i)
+		}
+
+		wg.Wait()
+	})
+}
+
+func getStackTrace() string {
+	buf := make([]byte, 4096)
+	n := runtime.Stack(buf, false)
+	return string(buf[:n])
 }
