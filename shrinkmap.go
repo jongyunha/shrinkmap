@@ -14,8 +14,8 @@ import (
 type ShrinkableMap[K comparable, V any] struct {
 	mu             sync.RWMutex
 	data           map[K]V
-	itemCount      int64
-	deletedCount   int64
+	itemCount      atomic.Int64
+	deletedCount   atomic.Int64
 	config         Config
 	lastShrinkTime atomic.Value
 	metrics        *Metrics
@@ -41,6 +41,9 @@ func New[K comparable, V any](config Config) *ShrinkableMap[K, V] {
 	}
 
 	sm.lastShrinkTime.Store(time.Now())
+
+	sm.itemCount.Store(0)
+	sm.deletedCount.Store(0)
 
 	if config.AutoShrinkEnabled {
 		go sm.shrinkLoop(ctx)
@@ -76,15 +79,14 @@ func (sm *ShrinkableMap[K, V]) Set(key K, value V) {
 	sm.mu.Lock()
 	_, exists := sm.data[key]
 	sm.data[key] = value
-	sm.mu.Unlock()
-
 	if !exists {
-		atomic.AddInt64(&sm.itemCount, 1)
+		sm.itemCount.Add(1)
 		sm.updateMetrics(1)
 	}
+	needsShrink := sm.config.MaxMapSize > 0 && sm.itemCount.Load() >= int64(sm.config.MaxMapSize)
+	sm.mu.Unlock()
 
-	// Check if shrink is needed
-	if sm.config.MaxMapSize > 0 && atomic.LoadInt64(&sm.itemCount) >= int64(sm.config.MaxMapSize) {
+	if needsShrink {
 		sm.TryShrink()
 	}
 }
@@ -103,7 +105,7 @@ func (sm *ShrinkableMap[K, V]) Delete(key K) bool {
 	_, exists := sm.data[key]
 	if exists {
 		delete(sm.data, key)
-		atomic.AddInt64(&sm.deletedCount, 1)
+		sm.deletedCount.Add(1)
 	}
 	sm.mu.Unlock()
 
@@ -114,19 +116,21 @@ func (sm *ShrinkableMap[K, V]) Delete(key K) bool {
 }
 
 // Len returns the current number of items in the map
-func (sm *ShrinkableMap[K, V]) Len() int {
-	return int(atomic.LoadInt64(&sm.itemCount) - atomic.LoadInt64(&sm.deletedCount))
+func (sm *ShrinkableMap[K, V]) Len() int64 {
+	return sm.itemCount.Load() - sm.deletedCount.Load()
 }
 
-// updateMetrics safely updates the metrics
 func (sm *ShrinkableMap[K, V]) updateMetrics(processedItems int64) {
-	sm.metrics.mu.Lock()
-	defer sm.metrics.mu.Unlock()
-
-	sm.metrics.totalItemsProcessed += processedItems
-	currentSize := atomic.LoadInt64(&sm.itemCount)
-	if currentSize > int64(sm.metrics.peakSize) {
-		sm.metrics.peakSize = int32(currentSize)
+	currentSize := sm.itemCount.Load()
+	if currentSize > int64(atomic.LoadInt32(&sm.metrics.peakSize)) {
+		sm.metrics.mu.Lock()
+		sm.metrics.totalItemsProcessed += processedItems
+		if currentSize > int64(sm.metrics.peakSize) {
+			sm.metrics.peakSize = int32(currentSize)
+		}
+		sm.metrics.mu.Unlock()
+	} else {
+		atomic.AddInt64(&sm.metrics.totalItemsProcessed, processedItems)
 	}
 }
 
@@ -149,12 +153,12 @@ func (sm *ShrinkableMap[K, V]) GetMetrics() Metrics {
 
 // shouldShrink determines if the map should be shrunk based on current conditions
 func (sm *ShrinkableMap[K, V]) shouldShrink() bool {
-	itemCount := atomic.LoadInt64(&sm.itemCount)
+	itemCount := sm.itemCount.Load()
 	if itemCount == 0 {
 		return false
 	}
 
-	deletedCount := atomic.LoadInt64(&sm.deletedCount)
+	deletedCount := sm.deletedCount.Load()
 	deletedRatio := float64(deletedCount) / float64(itemCount)
 
 	lastShrink := sm.lastShrinkTime.Load().(time.Time)
@@ -173,14 +177,6 @@ func (sm *ShrinkableMap[K, V]) shrink() bool {
 
 	startTime := time.Now()
 
-	// Create snapshot of current data
-	sm.mu.Lock()
-	currentData := make(map[K]V, len(sm.data))
-	for k, v := range sm.data {
-		currentData[k] = v
-	}
-	sm.mu.Unlock()
-
 	// Calculate new size
 	currentLen := sm.Len()
 	if currentLen == 0 {
@@ -192,26 +188,20 @@ func (sm *ShrinkableMap[K, V]) shrink() bool {
 		newSize = sm.config.InitialCapacity
 	}
 
+	sm.mu.Lock()
 	// Create and populate new map
 	newMap := make(map[K]V, newSize)
-	for k, v := range currentData {
+	for k, v := range sm.data {
 		newMap[k] = v
 	}
-
 	// Update map with new data
-	sm.mu.Lock()
 	sm.data = newMap
 	newCount := int64(len(newMap))
-	atomic.StoreInt64(&sm.itemCount, newCount)
-	atomic.StoreInt64(&sm.deletedCount, 0)
+	sm.itemCount.Store(newCount)
+	sm.deletedCount.Store(0)
 	sm.mu.Unlock()
 
-	// Update metrics
-	sm.metrics.mu.Lock()
-	sm.metrics.totalShrinks++
-	sm.metrics.lastShrinkDuration = time.Since(startTime)
-	sm.metrics.mu.Unlock()
-
+	sm.updateShrinkMetrics(startTime)
 	sm.lastShrinkTime.Store(time.Now())
 
 	return true
@@ -252,4 +242,11 @@ func (sm *ShrinkableMap[K, V]) shrinkLoop(ctx context.Context) {
 			sm.TryShrink()
 		}
 	}
+}
+
+func (sm *ShrinkableMap[K, V]) updateShrinkMetrics(startTime time.Time) {
+	sm.metrics.mu.Lock()
+	sm.metrics.totalShrinks++
+	sm.metrics.lastShrinkDuration = time.Since(startTime)
+	sm.metrics.mu.Unlock()
 }
