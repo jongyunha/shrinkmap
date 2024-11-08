@@ -180,21 +180,23 @@ for iter.Next() {
 
 ## 🗓️ Version History
 
-### v0.0.3 (Current)
+### v0.0.4 (Current)
 - Added batch operations support for atomic updates
 - Implemented safe iterator pattern
 - Enhanced performance for bulk operations
 - Added comprehensive benchmarking suite
 - Improved documentation and examples
 
-### v0.0.2
+### history
+#### v0.0.3
+- enhanced performance and memory management
+#### v0.0.2
 - Added error tracking and panic recovery
 - Added state snapshot functionality
 - Added graceful shutdown
 - Enhanced metrics collection
 - Improved resource cleanup
-
-### v0.0.1
+#### v0.0.1
 - Initial release with core functionality
 - Thread-safe implementation
 - Automatic shrinking support
