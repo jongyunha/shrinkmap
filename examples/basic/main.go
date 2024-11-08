@@ -30,6 +30,15 @@ func main() {
 
 	// Example 8: Comprehensive Example
 	comprehensiveExample()
+
+	// Example 9: Batch Operations
+	batchExample()
+
+	// Example 10: Iterator
+	iteratorExample()
+
+	// Example 11: Monitoring
+	gradingSystemExample()
 }
 
 func basicExample() {
