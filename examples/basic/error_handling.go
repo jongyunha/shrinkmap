@@ -14,7 +14,7 @@ func errorHandlingExample() {
 
 	// Simulate some operations that might cause errors
 	for i := 0; i < 100; i++ {
-		sm.Set(fmt.Sprintf("key-%d", i), i)
+		_ = sm.Set(fmt.Sprintf("key-%d", i), i)
 	}
 
 	// Get error metrics

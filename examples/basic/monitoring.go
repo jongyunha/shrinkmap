@@ -10,9 +10,9 @@ func monitoringExample() {
 	sm := shrinkmap.New[string, interface{}](shrinkmap.DefaultConfig())
 
 	// Add various types of data
-	sm.Set("string", "hello")
-	sm.Set("number", 42)
-	sm.Set("bool", true)
+	_ = sm.Set("string", "hello")
+	_ = sm.Set("number", 42)
+	_ = sm.Set("bool", true)
 
 	// Get metrics
 	metrics := sm.GetMetrics()

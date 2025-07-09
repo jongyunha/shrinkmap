@@ -138,11 +138,11 @@ func TestAPIErrorTypes(t *testing.T) {
 	t.Run("Error comparison", func(t *testing.T) {
 		err1 := NewShrinkMapError(ErrCodeMapStopped, "test", "test message")
 		err2 := NewShrinkMapError(ErrCodeMapStopped, "test2", "test message 2")
-		
+
 		if !errors.Is(err1, err2) {
 			t.Error("Errors with same code should be equal")
 		}
-		
+
 		if !IsMapStopped(err1) {
 			t.Error("Should recognize map stopped error")
 		}
@@ -155,7 +155,7 @@ func BenchmarkNewAPIMethods(b *testing.B) {
 
 	// Pre-populate some data
 	for i := 0; i < 1000; i++ {
-		sm.Set(i, i)
+		_ = sm.Set(i, i)
 	}
 
 	b.Run("Contains", func(b *testing.B) {
@@ -172,7 +172,10 @@ func BenchmarkNewAPIMethods(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			counter := 0
 			for pb.Next() {
-				sm.GetOrSet(counter, counter)
+				_, _, err := sm.GetOrSet(counter, counter)
+				if err != nil {
+					return
+				}
 				counter++
 			}
 		})
@@ -182,7 +185,7 @@ func BenchmarkNewAPIMethods(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			counter := 0
 			for pb.Next() {
-				sm.SetIfAbsent(counter+10000, counter)
+				_, _ = sm.SetIfAbsent(counter+10000, counter)
 				counter++
 			}
 		})

@@ -27,7 +27,7 @@ func TestIterator(t *testing.T) {
 		}
 
 		for k, v := range expected {
-			sm.Set(k, v)
+			_ = sm.Set(k, v)
 		}
 
 		iter := sm.NewIterator()
@@ -59,12 +59,12 @@ func TestIterator(t *testing.T) {
 			"c": 3,
 		}
 		for k, v := range initial {
-			sm.Set(k, v)
+			_ = sm.Set(k, v)
 		}
 
 		iter := sm.NewIterator()
 
-		sm.Set("d", 4)
+		_ = sm.Set("d", 4)
 		sm.Delete("a")
 
 		found := make(map[string]int)
@@ -103,7 +103,7 @@ func TestIterator(t *testing.T) {
 		defer sm.Stop()
 
 		for i := 0; i < 5; i++ {
-			sm.Set(string(rune('a'+i)), i)
+			_ = sm.Set(string(rune('a'+i)), i)
 		}
 
 		iter1 := sm.NewIterator()
@@ -141,7 +141,7 @@ func TestIterator(t *testing.T) {
 
 		itemCount := 10000
 		for i := 0; i < itemCount; i++ {
-			sm.Set(i, i*10)
+			_ = sm.Set(i, i*10)
 		}
 
 		iter := sm.NewIterator()
@@ -165,7 +165,7 @@ func TestIterator(t *testing.T) {
 		defer sm.Stop()
 
 		for i := 0; i < 1000; i++ {
-			sm.Set(i, i)
+			_ = sm.Set(i, i)
 		}
 
 		var wg sync.WaitGroup
@@ -193,7 +193,7 @@ func TestIterator(t *testing.T) {
 
 		go func() {
 			for i := 0; i < 100; i++ {
-				sm.Set(1000+i, i)
+				_ = sm.Set(1000+i, i)
 				time.Sleep(time.Millisecond)
 			}
 		}()
@@ -206,7 +206,7 @@ func TestIterator(t *testing.T) {
 		defer sm.Stop()
 
 		for i := 0; i < 100; i++ {
-			sm.Set(string(rune('a'+i%26)), i)
+			_ = sm.Set(string(rune('a'+i%26)), i)
 		}
 
 		for i := 0; i < 50; i++ {

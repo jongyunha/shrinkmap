@@ -27,7 +27,7 @@ func resourceManagementExample() {
 	// Simulate some work
 	fmt.Println("Performing operations...")
 	for i := 0; i < 50; i++ {
-		sm.Set(fmt.Sprintf("key-%d", i), i)
+		_ = sm.Set(fmt.Sprintf("key-%d", i), i)
 	}
 
 	// Delete some items

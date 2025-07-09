@@ -19,7 +19,7 @@ type Iterator[K comparable, V any] struct {
 //	sm := shrinkmap.New[string, int](shrinkmap.DefaultConfig())
 //	sm.Set("key1", 1)
 //	sm.Set("key2", 2)
-//	
+//
 //	iter := sm.NewIterator()
 //	for iter.Next() {
 //		key, value := iter.Get()

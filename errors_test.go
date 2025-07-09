@@ -28,7 +28,7 @@ func TestErrorTypes(t *testing.T) {
 
 	t.Run("ShrinkMapError creation and methods", func(t *testing.T) {
 		err := NewShrinkMapError(ErrCodeMapStopped, "test_operation", "test message")
-		
+
 		if err.Code != ErrCodeMapStopped {
 			t.Errorf("Expected code %v, got %v", ErrCodeMapStopped, err.Code)
 		}
@@ -55,7 +55,7 @@ func TestErrorTypes(t *testing.T) {
 		err := NewShrinkMapError(ErrCodeCapacityExceeded, "set", "capacity exceeded").
 			WithDetails("currentSize", int64(100)).
 			WithDetails("maxSize", int64(50))
-		
+
 		if len(err.Details) != 2 {
 			t.Errorf("Expected 2 details, got %d", len(err.Details))
 		}
@@ -71,7 +71,7 @@ func TestErrorTypes(t *testing.T) {
 		err1 := NewShrinkMapError(ErrCodeMapStopped, "op1", "message1")
 		err2 := NewShrinkMapError(ErrCodeMapStopped, "op2", "message2")
 		err3 := NewShrinkMapError(ErrCodeCapacityExceeded, "op3", "message3")
-		
+
 		if !errors.Is(err1, err2) {
 			t.Error("Errors with same code should be equal")
 		}
@@ -130,27 +130,27 @@ func TestErrorScenarios(t *testing.T) {
 	t.Run("Stopped map operations", func(t *testing.T) {
 		sm := New[string, int](DefaultConfig())
 		sm.Stop()
-		
+
 		// Test Set
 		if err := sm.Set("key", 1); !IsMapStopped(err) {
 			t.Errorf("Expected map stopped error, got %v", err)
 		}
-		
+
 		// Test SetIf
 		if _, err := sm.SetIf("key", 1, func(oldValue int, exists bool) bool { return true }); !IsMapStopped(err) {
 			t.Errorf("Expected map stopped error, got %v", err)
 		}
-		
+
 		// Test GetOrSet
 		if _, _, err := sm.GetOrSet("key", 1); !IsMapStopped(err) {
 			t.Errorf("Expected map stopped error, got %v", err)
 		}
-		
+
 		// Test SetIfAbsent
 		if _, err := sm.SetIfAbsent("key", 1); !IsMapStopped(err) {
 			t.Errorf("Expected map stopped error, got %v", err)
 		}
-		
+
 		// Test ApplyBatch
 		batch := BatchOperations[string, int]{
 			Operations: []BatchOperation[string, int]{
@@ -167,26 +167,26 @@ func TestErrorScenarios(t *testing.T) {
 		config.MaxMapSize = 2
 		sm := New[string, int](config)
 		defer sm.Stop()
-		
+
 		// Fill to capacity
-		sm.Set("key1", 1)
-		sm.Set("key2", 2)
-		
+		_ = sm.Set("key1", 1)
+		_ = sm.Set("key2", 2)
+
 		// Test Set exceeding capacity
 		if err := sm.Set("key3", 3); !IsCapacityExceeded(err) {
 			t.Errorf("Expected capacity exceeded error, got %v", err)
 		}
-		
+
 		// Test SetIf exceeding capacity
 		if _, err := sm.SetIf("key4", 4, func(oldValue int, exists bool) bool { return true }); !IsCapacityExceeded(err) {
 			t.Errorf("Expected capacity exceeded error, got %v", err)
 		}
-		
+
 		// Test GetOrSet exceeding capacity
 		if _, _, err := sm.GetOrSet("key5", 5); !IsCapacityExceeded(err) {
 			t.Errorf("Expected capacity exceeded error, got %v", err)
 		}
-		
+
 		// Test batch operation exceeding capacity
 		batch := BatchOperations[string, int]{
 			Operations: []BatchOperation[string, int]{
@@ -202,7 +202,7 @@ func TestErrorScenarios(t *testing.T) {
 	t.Run("Empty batch operations", func(t *testing.T) {
 		sm := New[string, int](DefaultConfig())
 		defer sm.Stop()
-		
+
 		batch := BatchOperations[string, int]{
 			Operations: []BatchOperation[string, int]{},
 		}

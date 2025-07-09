@@ -28,9 +28,9 @@ func customExample() {
 	sm := shrinkmap.New[string, int](config)
 
 	// Add items
-	sm.Set("one", 1)
-	sm.Set("two", 2)
-	sm.Set("three", 3)
+	_ = sm.Set("one", 1)
+	_ = sm.Set("two", 2)
+	_ = sm.Set("three", 3)
 
 	// Demonstrate get operation
 	if val, exists := sm.Get("two"); exists {

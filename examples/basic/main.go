@@ -46,8 +46,8 @@ func basicExample() {
 	sm := shrinkmap.New[string, int](shrinkmap.DefaultConfig())
 
 	// Basic operations
-	sm.Set("one", 1)
-	sm.Set("two", 2)
+	_ = sm.Set("one", 1)
+	_ = sm.Set("two", 2)
 
 	if val, exists := sm.Get("one"); exists {
 		fmt.Printf("Basic - Value: %d\n", val)

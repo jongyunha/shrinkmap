@@ -82,11 +82,11 @@ func (e *ShrinkMapError) WithDetails(key string, value interface{}) *ShrinkMapEr
 
 // Common error instances
 var (
-	ErrMapStopped        = NewShrinkMapError(ErrCodeMapStopped, "operation", "map has been stopped")
-	ErrCapacityExceeded  = NewShrinkMapError(ErrCodeCapacityExceeded, "set", "maximum capacity exceeded")
-	ErrInvalidConfig     = NewShrinkMapError(ErrCodeInvalidConfig, "config", "invalid configuration")
-	ErrShrinkFailed      = NewShrinkMapError(ErrCodeShrinkFailed, "shrink", "shrink operation failed")
-	ErrBatchFailed       = NewShrinkMapError(ErrCodeBatchFailed, "batch", "batch operation failed")
+	ErrMapStopped       = NewShrinkMapError(ErrCodeMapStopped, "operation", "map has been stopped")
+	ErrCapacityExceeded = NewShrinkMapError(ErrCodeCapacityExceeded, "set", "maximum capacity exceeded")
+	ErrInvalidConfig    = NewShrinkMapError(ErrCodeInvalidConfig, "config", "invalid configuration")
+	ErrShrinkFailed     = NewShrinkMapError(ErrCodeShrinkFailed, "shrink", "shrink operation failed")
+	ErrBatchFailed      = NewShrinkMapError(ErrCodeBatchFailed, "batch", "batch operation failed")
 )
 
 // IsMapStopped checks if the error indicates a stopped map

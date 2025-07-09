@@ -41,24 +41,24 @@ import (
 // For transient use cases, ensure to call Stop() when the map is no longer needed to prevent goroutine leaks.
 type ShrinkableMap[K comparable, V any] struct {
 	// 64-bit aligned fields (should be first on 32-bit architectures)
-	itemCount      atomic.Int64
-	deletedCount   atomic.Int64
-	
+	itemCount    atomic.Int64
+	deletedCount atomic.Int64
+
 	// Pointers and interfaces (8 bytes on 64-bit, 4 bytes on 32-bit)
 	data           map[K]V
 	metrics        *Metrics
 	cancel         context.CancelFunc
 	lastShrinkTime atomic.Value
-	
+
 	// Mutex (24 bytes on 64-bit)
-	mu             sync.RWMutex
-	
+	mu sync.RWMutex
+
 	// Structs (depends on size)
-	config         Config
-	
+	config Config
+
 	// Atomic bools (1 byte each but aligned)
-	shrinking      atomic.Bool
-	stopped        atomic.Bool
+	shrinking atomic.Bool
+	stopped   atomic.Bool
 }
 
 // KeyValue represents a key-value pair for iteration purposes
@@ -109,7 +109,7 @@ func New[K comparable, V any](config Config) *ShrinkableMap[K, V] {
 //
 //	sm := shrinkmap.New[string, int](shrinkmap.DefaultConfig())
 //	defer sm.Stop() // Ensure cleanup
-//	
+//
 //	// Use the map...
 //	sm.Set("key", 42)
 func (sm *ShrinkableMap[K, V]) Stop() {
@@ -310,7 +310,10 @@ func (sm *ShrinkableMap[K, V]) updateMetrics(processedItems int64) {
 		sm.metrics.mu.Lock()
 		sm.metrics.totalItemsProcessed += processedItems
 		if currentSize > int64(sm.metrics.peakSize) {
-			sm.metrics.peakSize = int32(currentSize)
+			// Safe conversion: we only convert if currentSize is reasonable
+			if currentSize <= int64(^uint32(0)>>1) {
+				sm.metrics.peakSize = int32(currentSize) // #nosec G115
+			}
 		}
 		sm.metrics.mu.Unlock()
 	} else {

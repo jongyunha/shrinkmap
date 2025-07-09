@@ -17,7 +17,7 @@ func builderExample() {
 
 	// Demonstrate typical usage pattern
 	for i := 0; i < 100; i++ {
-		sm.Set(i, fmt.Sprintf("value-%d", i))
+		_ = sm.Set(i, fmt.Sprintf("value-%d", i))
 	}
 
 	// Delete some items to trigger shrinking

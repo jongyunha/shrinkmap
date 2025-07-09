@@ -20,17 +20,17 @@ type Metrics struct {
 	shrinkPanics        int64
 	totalErrors         int64
 	lastShrinkDuration  time.Duration
-	
+
 	// Pointers and interfaces
-	lastError     *ErrorRecord
-	errorHistory  []ErrorRecord
-	
+	lastError    *ErrorRecord
+	errorHistory []ErrorRecord
+
 	// Mutex
 	mu sync.RWMutex
-	
+
 	// Time values
 	lastPanicTime time.Time
-	
+
 	// 32-bit values
 	peakSize int32
 }

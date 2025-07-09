@@ -10,15 +10,15 @@ type Config struct {
 	// Duration values (8 bytes each)
 	ShrinkInterval    time.Duration // How often to check if the map needs shrinking
 	MinShrinkInterval time.Duration // Minimum time between shrinks
-	
+
 	// Float64 values (8 bytes each)
-	ShrinkRatio           float64 // Ratio of deleted items that triggers shrinking (0.0 to 1.0)
-	CapacityGrowthFactor  float64 // Extra capacity factor when creating new map (e.g., 1.2 for 20% extra space)
-	
+	ShrinkRatio          float64 // Ratio of deleted items that triggers shrinking (0.0 to 1.0)
+	CapacityGrowthFactor float64 // Extra capacity factor when creating new map (e.g., 1.2 for 20% extra space)
+
 	// Int values (8 bytes on 64-bit)
 	InitialCapacity int // Initial capacity of the map
 	MaxMapSize      int // Maximum map size before forcing a shrink
-	
+
 	// Bool values (1 byte each)
 	AutoShrinkEnabled bool // Enable/disable automatic shrinking
 }

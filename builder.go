@@ -6,7 +6,6 @@ import "time"
 // It allows method chaining for a more readable and convenient API.
 type Builder[K comparable, V any] struct {
 	config Config
-	sm     *ShrinkableMap[K, V]
 }
 
 // NewBuilder creates a new Builder with default configuration.
@@ -105,7 +104,7 @@ func NewMapBuilder[K comparable, V any](sm *ShrinkableMap[K, V]) *MapBuilder[K, 
 // Set stores a key-value pair and returns the builder for chaining.
 // If an error occurs, it can be retrieved using the LastError method.
 func (mb *MapBuilder[K, V]) Set(key K, value V) *MapBuilder[K, V] {
-	mb.sm.Set(key, value)
+	_ = mb.sm.Set(key, value)
 	return mb
 }
 
@@ -117,7 +116,7 @@ func (mb *MapBuilder[K, V]) Delete(key K) *MapBuilder[K, V] {
 
 // SetIfAbsent sets a key-value pair only if the key doesn't exist and returns the builder for chaining.
 func (mb *MapBuilder[K, V]) SetIfAbsent(key K, value V) *MapBuilder[K, V] {
-	mb.sm.SetIfAbsent(key, value)
+	_, _ = mb.sm.SetIfAbsent(key, value)
 	return mb
 }
 
