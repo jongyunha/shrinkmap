@@ -21,7 +21,7 @@ func snapshotExample() {
 	}
 
 	for k, v := range testData {
-		sm.Set(k, v)
+		_ = sm.Set(k, v)
 	}
 
 	// Take a snapshot and process data safely
@@ -36,7 +36,7 @@ func snapshotExample() {
 	// Demonstrate concurrent safety
 	go func() {
 		// Modify map while processing snapshot
-		sm.Set("new-key", 100)
+		_ = sm.Set("new-key", 100)
 		sm.Delete("apple")
 	}()
 

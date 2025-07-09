@@ -1,51 +1,62 @@
+version: "2"
+run:
+  go: "1.21"
+  modules-download-mode: readonly
 linters:
-  disable-all: true
+  default: none
   enable:
+    - copyloopvar
     - errcheck
-    - gosimple
+    - gosec
     - govet
     - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
-    - revive
-    - gofmt
-    - goimports
     - misspell
-    - unconvert
-    - gosec
     - prealloc
-    - copyloopvar
-
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - checkPrivateReceivers
+            - disableStutteringCheck
+        - name: package-comments
+        - name: function-result-limit
+          arguments: [4]
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gosec
+          - mnd
+        path: _test\.go
+      - path: (.+)\.go$
+        text: vendor
+      - path: (.+)\.go$
+        text: test
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-dirs:
-    - vendor
-    - test
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gomnd
-        - gosec
-
-linters-settings:
-  govet:
-    enable:
-      - shadow
-  revive:
-    rules:
-      - name: exported
-        arguments:
-          - "checkPrivateReceivers"
-          - "disableStutteringCheck"
-  goimports:
-    local-prefixes: github.com/jongyunha/shrinkmap
-  gosec:
-    excludes:
-      - G115
-
-run:
-  timeout: 5m
-  go: '1.21'
-  modules-download-mode: readonly
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

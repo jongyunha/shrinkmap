@@ -21,7 +21,7 @@ func iteratorExample() {
 	}
 
 	for student, grade := range grades {
-		sm.Set(student, grade)
+		_ = sm.Set(student, grade)
 	}
 
 	// Use iterator to calculate average grade

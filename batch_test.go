@@ -6,7 +6,6 @@ import (
 )
 
 func TestBatchOperations(t *testing.T) {
-	// 기본 설정으로 맵 생성
 	config := Config{
 		InitialCapacity:      10,
 		AutoShrinkEnabled:    true,
@@ -52,9 +51,9 @@ func TestBatchOperations(t *testing.T) {
 		sm := New[string, int](config)
 		defer sm.Stop()
 
-		sm.Set("existing1", 100)
-		sm.Set("existing2", 200)
-		sm.Set("toDelete", 300)
+		_ = sm.Set("existing1", 100)
+		_ = sm.Set("existing2", 200)
+		_ = sm.Set("toDelete", 300)
 
 		batch := BatchOperations[string, int]{
 			Operations: []BatchOperation[string, int]{

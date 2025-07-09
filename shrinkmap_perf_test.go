@@ -30,7 +30,7 @@ func BenchmarkBasicOperations(b *testing.B) {
 	b.Run("Sequential Set", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			sm.Set(strconv.Itoa(i), i)
+			_ = sm.Set(strconv.Itoa(i), i)
 		}
 	})
 
@@ -45,7 +45,7 @@ func BenchmarkBasicOperations(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if i%2 == 0 {
-				sm.Set(strconv.Itoa(i), i)
+				_ = sm.Set(strconv.Itoa(i), i)
 			} else {
 				_, _ = sm.Get(strconv.Itoa(i - 1))
 			}
@@ -69,7 +69,7 @@ func BenchmarkDatasetSizes(b *testing.B) {
 			defer sm.Stop()
 
 			for i := 0; i < ds.size; i++ {
-				sm.Set(i, i)
+				_ = sm.Set(i, i)
 			}
 
 			b.ResetTimer()
@@ -84,7 +84,7 @@ func BenchmarkDatasetSizes(b *testing.B) {
 			b.Run("Random_Update", func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					key := rand.Intn(ds.size)
-					sm.Set(key, i)
+					_ = sm.Set(key, i)
 				}
 			})
 
@@ -164,7 +164,7 @@ func BenchmarkConcurrency(b *testing.B) {
 					key := localCounter % 1000
 					switch localCounter % 3 {
 					case 0:
-						sm.Set(key, localCounter)
+						_ = sm.Set(key, localCounter)
 					case 1:
 						_, _ = sm.Get(key)
 					case 2:
@@ -182,7 +182,7 @@ func BenchmarkShrinking(b *testing.B) {
 	defer sm.Stop()
 
 	for i := 0; i < largeDataset; i++ {
-		sm.Set(i, i)
+		_ = sm.Set(i, i)
 	}
 
 	for i := 0; i < largeDataset/2; i++ {

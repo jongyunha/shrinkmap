@@ -16,13 +16,17 @@ func TestBasicOperations(t *testing.T) {
 		sm := New[string, int](DefaultConfig())
 
 		// Test Set
-		sm.Set("test1", 100)
+		if err := sm.Set("test1", 100); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 		if val, exists := sm.Get("test1"); !exists || val != 100 {
 			t.Errorf("Expected 100, got %v, exists: %v", val, exists)
 		}
 
 		// Test overwrite
-		sm.Set("test1", 200)
+		if err := sm.Set("test1", 200); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 		if val, exists := sm.Get("test1"); !exists || val != 200 {
 			t.Errorf("Expected 200, got %v, exists: %v", val, exists)
 		}
@@ -36,7 +40,9 @@ func TestBasicOperations(t *testing.T) {
 	t.Run("Delete operation", func(t *testing.T) {
 		sm := New[string, int](DefaultConfig())
 
-		sm.Set("test1", 100)
+		if err := sm.Set("test1", 100); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 		if deleted := sm.Delete("test1"); !deleted {
 			t.Error("Delete should return true for existing key")
 		}
@@ -57,8 +63,12 @@ func TestBasicOperations(t *testing.T) {
 			t.Errorf("Expected length 0, got %d", l)
 		}
 
-		sm.Set("test1", 100)
-		sm.Set("test2", 200)
+		if err := sm.Set("test1", 100); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
+		if err := sm.Set("test2", 200); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 
 		// Wait for potential async operations
 		time.Sleep(10 * time.Millisecond)
@@ -87,7 +97,7 @@ func TestShrinking(t *testing.T) {
 
 		// Add items
 		for i := 0; i < 100; i++ {
-			sm.Set(i, fmt.Sprintf("value%d", i))
+			_ = sm.Set(i, fmt.Sprintf("value%d", i))
 		}
 
 		// Wait for operations to complete
@@ -146,7 +156,7 @@ func TestConcurrency(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerGoroutine; j++ {
 				key := base*operationsPerGoroutine + j
-				sm.Set(key, j)
+				_ = sm.Set(key, j)
 				if j%2 == 0 {
 					sm.Delete(key)
 				}
@@ -191,7 +201,7 @@ func BenchmarkShrinkableMap(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			counter := 0
 			for pb.Next() {
-				sm.Set(counter, counter)
+				_ = sm.Set(counter, counter)
 				counter++
 			}
 		})
@@ -201,7 +211,7 @@ func BenchmarkShrinkableMap(b *testing.B) {
 		sm := New[int, int](DefaultConfig())
 		itemCount := 1000
 		for i := 0; i < itemCount; i++ {
-			sm.Set(i, i)
+			_ = sm.Set(i, i)
 		}
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
@@ -217,7 +227,7 @@ func BenchmarkShrinkableMap(b *testing.B) {
 		sm := New[int, int](DefaultConfig())
 		itemCount := 1000
 		for i := 0; i < itemCount; i++ {
-			sm.Set(i, i)
+			_ = sm.Set(i, i)
 		}
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
@@ -239,7 +249,7 @@ func BenchmarkShrinkableMap(b *testing.B) {
 				key := counter % itemCount
 				switch counter % 3 {
 				case 0:
-					sm.Set(key, counter)
+					_ = sm.Set(key, counter)
 				case 1:
 					sm.Get(key)
 				case 2:
@@ -291,7 +301,7 @@ func BenchmarkMapComparison(b *testing.B) {
 				key := counter % itemCount
 				switch counter % 3 {
 				case 0:
-					sm.Set(key, counter)
+					_ = sm.Set(key, counter)
 				case 1:
 					sm.Get(key)
 				case 2:
@@ -424,14 +434,14 @@ func TestStopFunctionality(t *testing.T) {
 		sm := New[string, int](config)
 
 		for i := 0; i < 100; i++ {
-			sm.Set(fmt.Sprintf("key%d", i), i)
+			_ = sm.Set(fmt.Sprintf("key%d", i), i)
 		}
 
 		sm.Stop()
 
 		time.Sleep(50 * time.Millisecond)
 
-		sm.Set("new-key", 1000)
+		_ = sm.Set("new-key", 1000)
 		sm.Delete("new-key")
 
 		if !sm.stopped.Load() {
@@ -452,7 +462,7 @@ func TestSnapshot(t *testing.T) {
 		}
 
 		for k, v := range expectedData {
-			sm.Set(k, v)
+			_ = sm.Set(k, v)
 		}
 
 		snapshot := sm.Snapshot()
@@ -488,7 +498,7 @@ func TestSnapshot(t *testing.T) {
 					key := id*operations + j
 					switch j % 3 {
 					case 0:
-						sm.Set(key, j)
+						_ = sm.Set(key, j)
 					case 2:
 						sm.Delete(key)
 					}

@@ -14,17 +14,25 @@ type ErrorRecord struct {
 
 // Metrics tracks performance and error metrics of the map
 type Metrics struct {
-	mu                  sync.RWMutex
+	// 64-bit aligned fields (should be first on 32-bit architectures)
 	totalShrinks        int64
-	lastShrinkDuration  time.Duration
 	totalItemsProcessed int64
-	peakSize            int32
+	shrinkPanics        int64
+	totalErrors         int64
+	lastShrinkDuration  time.Duration
 
-	shrinkPanics  int64
+	// Pointers and interfaces
+	lastError    *ErrorRecord
+	errorHistory []ErrorRecord
+
+	// Mutex
+	mu sync.RWMutex
+
+	// Time values
 	lastPanicTime time.Time
-	lastError     *ErrorRecord
-	errorHistory  []ErrorRecord
-	totalErrors   int64
+
+	// 32-bit values
+	peakSize int32
 }
 
 func (m *Metrics) TotalShrinks() int64 {

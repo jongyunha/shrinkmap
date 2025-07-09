@@ -22,7 +22,7 @@ func comprehensiveExample() {
 	// Simulate heavy usage
 	go func() {
 		for i := 0; i < 1000; i++ {
-			sm.Set(fmt.Sprintf("key-%d", i), i)
+			_ = sm.Set(fmt.Sprintf("key-%d", i), i)
 			if i%2 == 0 {
 				sm.Delete(fmt.Sprintf("key-%d", i-1))
 			}
