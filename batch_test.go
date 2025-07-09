@@ -6,7 +6,6 @@ import (
 )
 
 func TestBatchOperations(t *testing.T) {
-	// 기본 설정으로 맵 생성
 	config := Config{
 		InitialCapacity:      10,
 		AutoShrinkEnabled:    true,

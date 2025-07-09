@@ -16,13 +16,17 @@ func TestBasicOperations(t *testing.T) {
 		sm := New[string, int](DefaultConfig())
 
 		// Test Set
-		sm.Set("test1", 100)
+		if err := sm.Set("test1", 100); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 		if val, exists := sm.Get("test1"); !exists || val != 100 {
 			t.Errorf("Expected 100, got %v, exists: %v", val, exists)
 		}
 
 		// Test overwrite
-		sm.Set("test1", 200)
+		if err := sm.Set("test1", 200); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 		if val, exists := sm.Get("test1"); !exists || val != 200 {
 			t.Errorf("Expected 200, got %v, exists: %v", val, exists)
 		}
@@ -36,7 +40,9 @@ func TestBasicOperations(t *testing.T) {
 	t.Run("Delete operation", func(t *testing.T) {
 		sm := New[string, int](DefaultConfig())
 
-		sm.Set("test1", 100)
+		if err := sm.Set("test1", 100); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 		if deleted := sm.Delete("test1"); !deleted {
 			t.Error("Delete should return true for existing key")
 		}
@@ -57,8 +63,12 @@ func TestBasicOperations(t *testing.T) {
 			t.Errorf("Expected length 0, got %d", l)
 		}
 
-		sm.Set("test1", 100)
-		sm.Set("test2", 200)
+		if err := sm.Set("test1", 100); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
+		if err := sm.Set("test2", 200); err != nil {
+			t.Errorf("Set should not error: %v", err)
+		}
 
 		// Wait for potential async operations
 		time.Sleep(10 * time.Millisecond)

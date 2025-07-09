@@ -1,51 +1,127 @@
+linters-settings:
+  dupl:
+    threshold: 100
+  funlen:
+    lines: 100
+    statements: 50
+  gci:
+    local-prefixes: github.com/jongyunha/shrinkmap
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+  gocyclo:
+    min-complexity: 15
+  goimports:
+    local-prefixes: github.com/jongyunha/shrinkmap
+  gomnd:
+    settings:
+      mnd:
+        checks:
+          - argument
+          - case
+          - condition
+          - operation
+          - return
+  govet:
+    check-shadowing: true
+    settings:
+      printf:
+        funcs:
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
+  lll:
+    line-length: 140
+  maligned:
+    suggest-new: true
+  misspell:
+    locale: US
+  nolintlint:
+    allow-leading-space: true
+    allow-unused: false
+    require-explanation: false
+    require-specific: false
+
 linters:
   disable-all: true
   enable:
+    - bodyclose
+    - deadcode
+    - depguard
+    - dogsled
+    - dupl
     - errcheck
+    - exportloopref
+    - funlen
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - gomnd
+    - goprintffuncname
+    - gosec
     - gosimple
     - govet
     - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
-    - revive
-    - gofmt
-    - goimports
+    - lll
     - misspell
+    - nolintlint
+    - rowserrcheck
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
     - unconvert
-    - gosec
-    - prealloc
-    - copyloopvar
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
 
 issues:
-  exclude-dirs:
-    - vendor
-    - test
-  max-issues-per-linter: 0
-  max-same-issues: 0
   exclude-rules:
     - path: _test\.go
       linters:
         - gomnd
+        - funlen
+        - dupl
         - gosec
-
-linters-settings:
-  govet:
-    enable:
-      - shadow
-  revive:
-    rules:
-      - name: exported
-        arguments:
-          - "checkPrivateReceivers"
-          - "disableStutteringCheck"
-  goimports:
-    local-prefixes: github.com/jongyunha/shrinkmap
-  gosec:
-    excludes:
-      - G115
+    - path: examples/
+      linters:
+        - gomnd
+        - funlen
+        - dupl
+        - gosec
+    - linters:
+        - lll
+      source: "^//go:generate "
 
 run:
   timeout: 5m
-  go: '1.21'
-  modules-download-mode: readonly
+  skip-dirs:
+    - vendor
+  skip-files:
+    - ".*\\.my\\.go$"
+    - lib/bad_lib.go
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
