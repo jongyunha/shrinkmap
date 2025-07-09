@@ -81,6 +81,3 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: 1.21
-
-    - name: Run benchmarks
-      run: go test -bench=. -benchmem -count=3 ./...
